@@ -1,1 +1,38 @@
-build.yml
+name: Build ESP32 Bin
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Arduino CLI
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: Install ESP32 Core
+        run: |
+          arduino-cli config add board_manager.additional_urls https://dl.espressif.com/dl/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+
+      - name: Install Libraries
+        run: |
+          arduino-cli lib install "PubSubClient"
+          arduino-cli lib install "Adafruit GFX Library"
+          arduino-cli lib install "Adafruit ILI9341"
+
+      - name: Compile
+        run: |
+          arduino-cli compile --fqbn esp32:esp32:esp32 ./esp32-project.ino --output-dir ./output
+
+      - name: Upload BIN
+        uses: actions/upload-artifact@v4
+        with:
+          name: esp32-firmware
+          path: ./output/*.bin
