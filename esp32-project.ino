@@ -15,6 +15,7 @@ const char* MQTT_CLIENTID = "esp32_wokwi_client_";
 #define TFT_CS   5
 #define TFT_DC   2
 #define TFT_RST  4
+#define LED_PIN  13
 
 // ===================== 对象 =====================
 Adafruit_ILI9341 tft(TFT_CS, TFT_DC, TFT_RST);
@@ -31,7 +32,10 @@ bool reconnectMQTT();
 // ===================== setup =====================
 void setup() {
   Serial.begin(115200);
-  Serial.println("ESP32 MQTT + ILI9341 启动");
+  Serial.println("ESP32 MQTT + ILI9341 + LED 启动");
+
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LOW);
 
   initScreen();
   showStatus("System Starting...", ILI9341_BLUE);
@@ -114,7 +118,18 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   }
   msgBuffer[length] = '\0';
   Serial.println(msgBuffer);
+
+  // 显示消息到屏幕
   showStatus(msgBuffer, ILI9341_YELLOW);
+
+  // 控制 LED
+  if (strcmp(msgBuffer, "on") == 0) {
+    digitalWrite(LED_PIN, HIGH);
+    Serial.println("LED 打开");
+  } else if (strcmp(msgBuffer, "off") == 0) {
+    digitalWrite(LED_PIN, LOW);
+    Serial.println("LED 关闭");
+  }
 }
 
 // ===================== MQTT重连 =====================
