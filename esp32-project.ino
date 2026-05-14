@@ -7,8 +7,10 @@
 const char* WIFI_SSID     = "Wokwi-GUEST";
 const char* WIFI_PASSWORD = "";
 
-const char* MQTT_SERVER   = "test.mosquitto.org";
-const int   MQTT_PORT     = 1880;
+// 注意：使用 broker.hivemq.com 替代 test.mosquitto.org
+// 因为 test.mosquitto.org 在宿主机网络下不可达
+const char* MQTT_SERVER   = "broker.hivemq.com";
+const int   MQTT_PORT     = 1883;
 const char* MQTT_TOPIC    = "esp32/wokwi/led";
 const char* MQTT_CLIENTID = "esp32_wokwi_client_";
 
@@ -149,3 +151,4 @@ bool reconnectMQTT() {
     return false;
   }
 }
+
