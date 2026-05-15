@@ -89,12 +89,12 @@ SystemState sysState = SYS_START;
 unsigned long lastConnectAttempt = 0;
 const unsigned long CONNECT_RETRY_MS = 3000;
 
-// 状态灯交替心跳：亮 500ms  +  灭 2000ms
+// 状态灯交替心跳：亮 1000ms  +  灭 1000ms（50%占空比，更明显）
 enum HeartbeatPhase { HB_PHASE_OFF, HB_PHASE_ON };
 HeartbeatPhase hbPhase = HB_PHASE_OFF;
 unsigned long lastHbToggleMs = 0;
-const unsigned long HB_ON_MS = 500;
-const unsigned long HB_OFF_MS = 2000;
+const unsigned long HB_ON_MS = 1000;    // 亮 1 秒
+const unsigned long HB_OFF_MS = 1000;   // 灭 1 秒（50%占空比）
 
 unsigned long lastSwitchHeartMs = 0;  // 开关灯自检
 unsigned long lastStatusMs = 0;
@@ -130,7 +130,7 @@ void setup() {
   // LED 自检：状态灯快闪 3 次，开关灯常亮 0.5 秒
   Serial.println("[TEST] 双LED自检开始:");
   Serial.println("  状态灯(GPIO12): 快闪 3 次");
-  blinkTask.start(3, 200, 200);
+  blinkTask.start(3, 300, 300);
   Serial.println("  开关灯(GPIO13): 常亮 0.5 秒");
   digitalWrite(SWITCH_LED_PIN, HIGH);
   delay(500);   // 仅此一次，后续全部非阻塞
@@ -318,7 +318,7 @@ void startMQTTConnection() {
     }
 
     // 状态灯快闪 5 次 → MQTT 已连接
-    blinkTask.start(5, 80, 80);
+    blinkTask.start(5, 200, 200);
     showStatus("MQTT Connected!", ILI9341_GREEN);
     Serial.println("[MQTT] 等待消息...");
     Serial.println();
@@ -347,7 +347,7 @@ void startMQTTConnection() {
     Serial.println(")");
 
     // 状态灯慢闪 3 次 → MQTT 连接失败
-    blinkTask.start(3, 300, 300);
+    blinkTask.start(3, 500, 500);
     showStatus("MQTT Failed", ILI9341_RED);
   }
 }
@@ -379,7 +379,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   Serial.println("==============================");
 
   // 状态灯快闪 2 次 → 确认收到消息
-  blinkTask.start(2, 60, 60);
+  blinkTask.start(2, 200, 200);
 
   // 显示到屏幕
   showStatus(msgBuffer, ILI9341_YELLOW);
