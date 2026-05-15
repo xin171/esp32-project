@@ -88,8 +88,15 @@ enum SystemState {
 SystemState sysState = SYS_START;
 unsigned long lastConnectAttempt = 0;
 const unsigned long CONNECT_RETRY_MS = 3000;
-unsigned long lastHeartbeatMs = 0;
-unsigned long lastSwitchHeartMs = 0;  // 开关灯心跳（证明GPIO13正常工作）
+
+// 状态灯交替心跳：亮 500ms  +  灭 2000ms
+enum HeartbeatPhase { HB_PHASE_OFF, HB_PHASE_ON };
+HeartbeatPhase hbPhase = HB_PHASE_OFF;
+unsigned long lastHbToggleMs = 0;
+const unsigned long HB_ON_MS = 500;
+const unsigned long HB_OFF_MS = 2000;
+
+unsigned long lastSwitchHeartMs = 0;  // 开关灯自检
 unsigned long lastStatusMs = 0;
 
 // ===================== 函数声明 =====================
@@ -196,10 +203,29 @@ void loop() {
       break;
 
     case SYS_RUNNING:
-      // ========== 状态灯心跳（每 5 秒微闪 50ms） ==========
-      if (!blinkTask.active && now - lastHeartbeatMs > 5000) {
-        lastHeartbeatMs = now;
-        blinkTask.start(1, 50, 0);
+      // ========== 状态灯交替心跳（500ms亮 / 2000ms灭 = 2.5秒周期） ==========
+      if (!blinkTask.active) {
+        switch (hbPhase) {
+          case HB_PHASE_ON:
+            // 亮满 500ms → 切换为灭
+            if (now - lastHbToggleMs >= HB_ON_MS) {
+              digitalWrite(STATUS_LED_PIN, LOW);
+              hbPhase = HB_PHASE_OFF;
+            }
+            break;
+          case HB_PHASE_OFF:
+            // 灭满 2000ms → 切换为亮
+            if (now - lastHbToggleMs >= HB_OFF_MS) {
+              digitalWrite(STATUS_LED_PIN, HIGH);
+              lastHbToggleMs = now;
+              hbPhase = HB_PHASE_ON;
+            }
+            break;
+        }
+      } else {
+        // BlinkTask 运行时（闪烁模式），重置心跳状态
+        hbPhase = HB_PHASE_OFF;
+        lastHbToggleMs = now;
       }
 
       // ========== 开关灯自检（每 20 秒闪 100ms，证明GPIO正常） ==========
