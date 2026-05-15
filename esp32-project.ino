@@ -89,6 +89,7 @@ SystemState sysState = SYS_START;
 unsigned long lastConnectAttempt = 0;
 const unsigned long CONNECT_RETRY_MS = 3000;
 unsigned long lastHeartbeatMs = 0;
+unsigned long lastSwitchHeartMs = 0;  // 开关灯心跳（证明GPIO13正常工作）
 unsigned long lastStatusMs = 0;
 
 // ===================== 函数声明 =====================
@@ -199,6 +200,14 @@ void loop() {
       if (!blinkTask.active && now - lastHeartbeatMs > 5000) {
         lastHeartbeatMs = now;
         blinkTask.start(1, 50, 0);
+      }
+
+      // ========== 开关灯自检（每 20 秒闪 100ms，证明GPIO正常） ==========
+      if (now - lastSwitchHeartMs > 20000) {
+        lastSwitchHeartMs = now;
+        digitalWrite(SWITCH_LED_PIN, HIGH);
+        delay(100);
+        digitalWrite(SWITCH_LED_PIN, LOW);
       }
 
       // ========== 每 10 秒打印状态 ==========
@@ -347,16 +356,26 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   showStatus(msgBuffer, ILI9341_YELLOW);
 
   // ========== 控制开关灯（GPIO 13） ==========
-  if (strcmp(msgBuffer, "on") == 0) {
+  // 使用长度+字节比较（比 strcmp 更可靠，避免隐藏字符问题）
+  if (length == 2 && payload[0] == 'o' && payload[1] == 'n') {
     digitalWrite(SWITCH_LED_PIN, HIGH);
     Serial.println("[开关灯] 🔴 打开 (常亮)");
-  } else if (strcmp(msgBuffer, "off") == 0) {
+  } else if (length == 3 && payload[0] == 'o' && payload[1] == 'f' && payload[2] == 'f') {
     digitalWrite(SWITCH_LED_PIN, LOW);
     Serial.println("[开关灯] ⚫ 关闭");
   } else {
-    Serial.print("[开关灯] ⚠️ 未知: \"");
+    Serial.print("[开关灯] ⚠️ 未知指令, 长度=");
+    Serial.print(length);
+    Serial.print(" 内容=\"");
     Serial.print(msgBuffer);
     Serial.println("\"");
+    // 显示每个字节的数值
+    Serial.print("[开关灯] BYTES: ");
+    for (unsigned int i = 0; i < length; i++) {
+      Serial.print((int)payload[i]);
+      Serial.print(" ");
+    }
+    Serial.println();
   }
 }
 
