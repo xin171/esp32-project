@@ -324,7 +324,10 @@ void startMQTTConnection() {
     Serial.println();
 
     sysState = SYS_RUNNING;
-    lastHeartbeatMs = millis();
+    // 初始化交替心跳为"亮"状态
+    hbPhase = HB_PHASE_ON;
+    lastHbToggleMs = millis();
+    digitalWrite(STATUS_LED_PIN, HIGH);
 
   } else {
     int state = mqttClient.state();
@@ -404,5 +407,4 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     Serial.println();
   }
 }
-
 
