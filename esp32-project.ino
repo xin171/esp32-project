@@ -327,8 +327,11 @@ void startMQTTConnection() {
     Serial.println("[MQTT] 等待消息...");
     Serial.println();
 
-    // 发布初始状态（开关灯默认关闭）
-    publishLEDState("off");
+    // 从 GPIO13 读取真实状态发布（ESP32 重连时保证状态同步）
+    const char* bootState = digitalRead(SWITCH_LED_PIN) == HIGH ? "on" : "off";
+    Serial.print("[MQTT] 初始状态 GPIO13: ");
+    Serial.println(bootState);
+    publishLEDState(bootState);
     Serial.println();
 
     sysState = SYS_RUNNING;
