@@ -9,9 +9,10 @@ const char* WIFI_PASSWORD = "";
 
 const char* MQTT_SERVER      = "broker.hivemq.com";
 const int   MQTT_PORT        = 1883;
-const char* MQTT_TOPIC       = "esp32/wokwi/led";
-const char* MQTT_STATUS_TOPIC= "esp32/wokwi/led/status";
-const char* MQTT_CLIENTID    = "esp32_wokwi_client_";
+const char* MQTT_TOPIC            = "esp32/wokwi/led";
+const char* MQTT_STATUS_TOPIC     = "esp32/wokwi/led/status";
+const char* MQTT_STATUS_REQ_TOPIC = "esp32/wokwi/led/status/req";
+const char* MQTT_CLIENTID         = "esp32_wokwi_client_";
 
 #define TFT_CS   5
 #define TFT_DC   2
@@ -309,14 +310,24 @@ void startMQTTConnection() {
     // 立即处理 CONNACK
     mqttClient.loop();
 
-    Serial.print("[MQTT] 订阅: ");
+    Serial.print("[MQTT] 订阅控制: ");
     Serial.println(MQTT_TOPIC);
 
     if (mqttClient.subscribe(MQTT_TOPIC, 0)) {
-      Serial.println("[MQTT] ✅ 订阅成功 (QoS 0)");
+      Serial.println("[MQTT] ✅ 订阅控制成功 (QoS 0)");
       mqttClient.loop();  // 处理 SUBACK
     } else {
-      Serial.println("[MQTT] ❌ 订阅失败");
+      Serial.println("[MQTT] ❌ 订阅控制失败");
+    }
+
+    // 订阅状态请求主题
+    Serial.print("[MQTT] 订阅状态请求: ");
+    Serial.println(MQTT_STATUS_REQ_TOPIC);
+    if (mqttClient.subscribe(MQTT_STATUS_REQ_TOPIC, 0)) {
+      Serial.println("[MQTT] ✅ 订阅状态请求成功 (QoS 0)");
+      mqttClient.loop();
+    } else {
+      Serial.println("[MQTT] ❌ 订阅状态请求失败");
     }
 
     // 状态灯快闪 5 次 → MQTT 已连接
@@ -409,6 +420,22 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   // 显示到屏幕
   showStatus(msgBuffer, ILI9341_YELLOW);
 
+  // ========== 处理状态请求 ==========
+  // 网页重连后发送 "request" 到 MQTT_STATUS_REQ_TOPIC
+  // ESP32 收到后发布当前状态 3 次（200ms 间隔），确保网页能同步
+  if (strcmp(topic, MQTT_STATUS_REQ_TOPIC) == 0) {
+    Serial.println("[状态请求] 收到状态请求，将发送当前状态 3 次");
+    const char* currentState = digitalRead(SWITCH_LED_PIN) == HIGH ? "on" : "off";
+    Serial.print("[状态请求] 当前开关状态: ");
+    Serial.println(currentState);
+    for (int i = 0; i < 3; i++) {
+      publishLEDState(currentState);
+      delay(200);  // 短暂间隔，非阻塞架构中仅此一处小 delay，不影响大局
+    }
+    Serial.println("[状态请求] ✅ 已发送 3 次状态响应");
+    return;  // 不继续执行下面的开关控制逻辑
+  }
+
   // ========== 控制开关灯（GPIO 13） ==========
   // 使用长度+字节比较（比 strcmp 更可靠，避免隐藏字符问题）
   if (length == 2 && payload[0] == 'o' && payload[1] == 'n') {
@@ -434,4 +461,5 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     Serial.println();
   }
 }
+
 
