@@ -7,10 +7,11 @@
 const char* WIFI_SSID     = "Wokwi-GUEST";
 const char* WIFI_PASSWORD = "";
 
-const char* MQTT_SERVER   = "broker.hivemq.com";
-const int   MQTT_PORT     = 1883;
-const char* MQTT_TOPIC    = "esp32/wokwi/led";
-const char* MQTT_CLIENTID = "esp32_wokwi_client_";
+const char* MQTT_SERVER      = "broker.hivemq.com";
+const int   MQTT_PORT        = 1883;
+const char* MQTT_TOPIC       = "esp32/wokwi/led";
+const char* MQTT_STATUS_TOPIC= "esp32/wokwi/led/status";
+const char* MQTT_CLIENTID    = "esp32_wokwi_client_";
 
 #define TFT_CS   5
 #define TFT_DC   2
@@ -104,6 +105,7 @@ void initScreen();
 void showStatus(const char* status, uint16_t color);
 void mqttCallback(char* topic, byte* payload, unsigned int length);
 void startMQTTConnection();
+void publishLEDState(const char* state);
 
 // ===================== setup =====================
 void setup() {
@@ -323,6 +325,10 @@ void startMQTTConnection() {
     Serial.println("[MQTT] 等待消息...");
     Serial.println();
 
+    // 发布初始状态（开关灯默认关闭）
+    publishLEDState("off");
+    Serial.println();
+
     sysState = SYS_RUNNING;
     // 初始化交替心跳为"亮"状态
     hbPhase = HB_PHASE_ON;
@@ -349,6 +355,25 @@ void startMQTTConnection() {
     // 状态灯慢闪 3 次 → MQTT 连接失败
     blinkTask.start(3, 500, 500);
     showStatus("MQTT Failed", ILI9341_RED);
+  }
+}
+
+// ===================== 发布 LED 状态 =====================
+void publishLEDState(const char* state) {
+  if (!mqttClient.connected()) {
+    Serial.println("[状态发布] ❌ MQTT 未连接，无法发布");
+    return;
+  }
+
+  bool ok = mqttClient.publish(MQTT_STATUS_TOPIC, state);
+  if (ok) {
+    Serial.print("[状态发布] 🔄 ");
+    Serial.print(MQTT_STATUS_TOPIC);
+    Serial.print(": ");
+    Serial.println(state);
+  } else {
+    Serial.print("[状态发布] ❌ 发布失败 ");
+    Serial.println(state);
   }
 }
 
@@ -389,9 +414,11 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   if (length == 2 && payload[0] == 'o' && payload[1] == 'n') {
     digitalWrite(SWITCH_LED_PIN, HIGH);
     Serial.println("[开关灯] 🔴 打开 (常亮)");
+    publishLEDState("on");
   } else if (length == 3 && payload[0] == 'o' && payload[1] == 'f' && payload[2] == 'f') {
     digitalWrite(SWITCH_LED_PIN, LOW);
     Serial.println("[开关灯] ⚫ 关闭");
+    publishLEDState("off");
   } else {
     Serial.print("[开关灯] ⚠️ 未知指令, 长度=");
     Serial.print(length);
