@@ -98,7 +98,6 @@ unsigned long lastHbToggleMs = 0;
 const unsigned long HB_ON_MS = 1000;    // 亮 1 秒
 const unsigned long HB_OFF_MS = 1000;   // 灭 1 秒（50%占空比）
 
-unsigned long lastSwitchHeartMs = 0;  // 开关灯自检
 unsigned long lastStatusMs = 0;
 
 // ===================== 函数声明 =====================
@@ -229,14 +228,6 @@ void loop() {
         // BlinkTask 运行时（闪烁模式），重置心跳状态
         hbPhase = HB_PHASE_OFF;
         lastHbToggleMs = now;
-      }
-
-      // ========== 开关灯自检（每 20 秒闪 100ms，证明GPIO正常） ==========
-      if (now - lastSwitchHeartMs > 20000) {
-        lastSwitchHeartMs = now;
-        digitalWrite(SWITCH_LED_PIN, HIGH);
-        delay(100);
-        digitalWrite(SWITCH_LED_PIN, LOW);
       }
 
       // ========== 每 10 秒打印状态 ==========
@@ -421,19 +412,39 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   showStatus(msgBuffer, ILI9341_YELLOW);
 
   // ========== 处理状态请求 ==========
-  // 网页重连后发送 "request" 到 MQTT_STATUS_REQ_TOPIC
-  // ESP32 收到后发布当前状态 3 次（200ms 间隔），确保网页能同步
-  if (strcmp(topic, MQTT_STATUS_REQ_TOPIC) == 0) {
-    Serial.println("[状态请求] 收到状态请求，将发送当前状态 3 次");
+  // 方案1：主题匹配（主通道）
+  bool isStateRequest = (strcmp(topic, MQTT_STATUS_REQ_TOPIC) == 0);
+  // 方案2：负载匹配（备用通道 — 网页也可能在控制主题上发 "request"）
+  if (!isStateRequest && length == 7 &&
+      payload[0] == 'r' && payload[1] == 'e' && payload[2] == 'q' &&
+      payload[3] == 'u' && payload[4] == 'e' && payload[5] == 's' && payload[6] == 't') {
+    isStateRequest = true;
+    Serial.print("[状态请求] ⚠️ 通过负载匹配触发（主题: ");
+    Serial.print(topic);
+    Serial.println("）");
+  }
+
+  if (isStateRequest) {
+    Serial.println("==============================");
+    Serial.println("[状态请求] 🟢 处理状态请求");
     const char* currentState = digitalRead(SWITCH_LED_PIN) == HIGH ? "on" : "off";
-    Serial.print("[状态请求] 当前开关状态: ");
-    Serial.println(currentState);
+    Serial.print("[状态请求] GPIO13 电平: ");
+    Serial.print(digitalRead(SWITCH_LED_PIN));
+    Serial.print(" → 发布: \"");
+    Serial.print(currentState);
+    Serial.println("\" × 3 次");
+
+    // 状态灯快闪 5 次作为视觉确认
+    Serial.println("[状态请求] 状态灯快闪 5 次（视觉确认）");
+    blinkTask.start(5, 150, 150);
+
+    // 发布 3 次确保至少 1 次到达
     for (int i = 0; i < 3; i++) {
       publishLEDState(currentState);
-      delay(200);  // 短暂间隔，非阻塞架构中仅此一处小 delay，不影响大局
     }
-    Serial.println("[状态请求] ✅ 已发送 3 次状态响应");
-    return;  // 不继续执行下面的开关控制逻辑
+    Serial.println("[状态请求] ✅ 完成");
+    Serial.println("==============================");
+    return;
   }
 
   // ========== 控制开关灯（GPIO 13） ==========
@@ -447,7 +458,6 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     Serial.println("[开关灯] ⚫ 关闭");
     publishLEDState("off");
   } else {
-   
     Serial.print("[开关灯] ⚠️ 未知指令, 长度=");
     Serial.print(length);
     Serial.print(" 内容=\"");
