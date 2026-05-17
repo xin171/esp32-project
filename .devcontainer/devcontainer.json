@@ -1,0 +1,8 @@
+{
+    "name": "ESP32 Dev Environment",
+    "image": "mcr.microsoft.com/devcontainers/universal:2-linux",
+    "features": {
+        "ghcr.io/devcontainers/features/python:1": {}
+    },
+    "postCreateCommand": "pip install platformio"
+}
